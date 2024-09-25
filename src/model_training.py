@@ -12,12 +12,19 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from xgboost import XGBRegressor
 import warnings
+import time
+import optuna
+import cProfile
+import pstats
+from io import StringIO
+import tqdm
 
 warnings.filterwarnings('ignore')  # Para evitar warnings innecesarios
 
 def load_and_preprocess_data(filepath):
     # Cargar el dataset
     df = pd.read_csv(filepath, low_memory=False)
+    df = df.iloc[0:100] #Momentaneamente esta limitado para que cargue rapido
 
     # Convertir 'Calendar_date' a datetime
     df['Calendar_date'] = pd.to_datetime(df['Calendar_date'], format='%Y%m%d')
@@ -64,7 +71,7 @@ def define_models():
             }
         },
         'XGBoost': {
-            'model': XGBRegressor(random_state=42, objective='reg:squarederror'),
+            'model': XGBRegressor(device='cuda',random_state=42, objective='reg:squarederror'),
             'params': {
                 'n_estimators': [100, 200, 300],
                 'learning_rate': [0.01, 0.1, 0.2],
@@ -89,7 +96,7 @@ def define_models():
             }
         },
         'MLPRegressor': {
-            'model': MLPRegressor(max_iter=500, random_state=42),
+            'model': MLPRegressor(max_iter=1000, random_state=42),
             'params': {
                 'hidden_layer_sizes': [(50,), (100,), (100, 50)],
                 'activation': ['relu', 'tanh'],
@@ -102,29 +109,100 @@ def define_models():
     return models
 
 
-def train_models(X_train, y_train, models, n_iter=5, cv=3, scoring='neg_mean_absolute_error'):
-    trained_models = {}
-    for name, config in models.items():
-        print(f"Entrenando {name}...")
-        random_search = RandomizedSearchCV(
-            estimator=config['model'],
-            param_distributions=config['params'],
-            n_iter=n_iter,
-            cv=cv,
-            scoring=scoring,
-            verbose=1,
-            random_state=42,
-            n_jobs=-1
-        )
-        random_search.fit(X_train, y_train)
-        trained_models[name] = random_search.best_estimator_
-        print(f"Mejores hiperparámetros para {name}: {random_search.best_params_}\n")
-    return trained_models
+def train_with_random_search(X_train, y_train, model, params, n_iter=5, cv=3, scoring='neg_mean_absolute_error',
+                             n_jobs=-1):
+    random_search = RandomizedSearchCV(
+        estimator=model,
+        param_distributions=params,
+        n_iter=n_iter,
+        cv=cv,
+        scoring=scoring,
+        verbose=1,
+        random_state=42,
+        n_jobs=n_jobs
+    )
+    random_search.fit(X_train, y_train)
+    return random_search
 
+
+def objective(trial, model, params, X_train, y_train, cv, scoring):
+    # Definir el espacio de hiperparámetros para Optuna
+    param_suggestions = {}
+    for param, values in params.items():
+        if isinstance(values, list):
+            param_suggestions[param] = trial.suggest_categorical(param, values)
+        else:
+            # Para otros tipos de distribución, puedes agregar más condiciones
+            param_suggestions[param] = trial.suggest_float(param, *values)
+
+    model.set_params(**param_suggestions)
+
+    # Evaluar el modelo con validación cruzada
+    score = -1 * mean_absolute_error(y_train, model.fit(X_train, y_train).predict(X_train))
+    return score
+
+def train_with_optuna(X_train, y_train, model, params, n_trials=50, cv=3, scoring='neg_mean_absolute_error'):
+    def objective_func(trial):
+        param = {}
+        for key, value in params.items():
+            if isinstance(value, list):
+                param[key] = trial.suggest_categorical(key, value)
+            else:
+                # Agregar más condiciones si es necesario
+                param[key] = trial.suggest_float(key, *value)
+        model.set_params(**param)
+        # Validación cruzada
+        mae = mean_absolute_error(y_train, model.fit(X_train, y_train).predict(X_train))
+        return mae
+
+    study = optuna.create_study(direction='minimize')
+    study.optimize(objective_func, n_trials=n_trials)
+    best_params = study.best_params
+    model.set_params(**best_params)
+    model.fit(X_train, y_train)
+    return model, best_params
+
+def train_models(X_train, y_train, models, search_method='random', n_iter=5, cv=3, scoring='neg_mean_absolute_error'):
+    trained_models = {}
+    timings = {}
+    for name, config in tqdm.tqdm(models.items(), desc="Entrenando modelos"):
+        print(f"Entrenando {name} con método {search_method}...")
+        start_time = time.time()
+        if search_method == 'random':
+            search = train_with_random_search(
+                X_train, y_train,
+                config['model'],
+                config['params'],
+                n_iter=n_iter,
+                cv=cv,
+                scoring=scoring,
+                n_jobs=-1
+            )
+            best_model = search.best_estimator_
+            best_params = search.best_params_
+        elif search_method == 'optuna':
+            best_model, best_params = train_with_optuna(
+                X_train, y_train,
+                config['model'],
+                config['params'],
+                n_trials=n_iter * 10,  # Ajustar según sea necesario
+                cv=cv,
+                scoring=scoring
+            )
+        else:
+            raise ValueError("Método de búsqueda no soportado. Usa 'random' o 'optuna'.")
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        timings[name] = elapsed_time
+        trained_models[name] = best_model
+        print(f"Mejores hiperparámetros para {name}: {best_params}")
+        print(f"Tiempo de entrenamiento para {name}: {elapsed_time:.2f} segundos\n")
+    return trained_models, timings
 
 def save_trained_models(trained_models):
     for name, model in trained_models.items():
-        filename = f'models/{name}_best_model.joblib'
+        filename = f'../models/{name}_best_model.joblib'
         joblib.dump(model, filename)
         print(f"Modelo {name} guardado en {filename}")
 
@@ -139,11 +217,34 @@ def main():
     # Definir los modelos y sus hiperparámetros
     models = define_models()
 
+    # Seleccionar el método de búsqueda ('random' o 'optuna')
+    search_method = 'random'  # Cambia a 'optuna' según necesites
+
+    # Iniciar el perfilado
+    profiler = cProfile.Profile()
+    profiler.enable()
+
     # Entrenar los modelos con Random Search
-    trained_models = train_models(X_train, y_train, models)
+    trained_models, timings = train_models(X_train, y_train, models, search_method='random')
+
+    # Detener el perfilado
+    profiler.disable()
+    s = StringIO()
+    sortby = 'cumulative'
+    ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+    ps.print_stats(10)  # Mostrar las 10 funciones más costosas
+    with open("profiling_results.txt", "w") as f:
+        f.write(s.getvalue())
+    print("Perfilado guardado en 'profiling_results.txt'")
 
     # Guardar los modelos entrenados
     save_trained_models(trained_models)
+
+    print("Entrenamiento de modelos completado.")
+
+    # Guardar los tiempos de entrenamiento
+    joblib.dump(timings, '../models/training_timings.joblib')
+    print("Tiempos de entrenamiento guardados en 'models/training_timings.joblib'")
 
     print("Entrenamiento de modelos completado.")
 
