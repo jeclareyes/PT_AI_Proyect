@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the dataset with low_memory set to False to avoid Dtype warnings
-data_path = 'Dataset-PT.csv'
+data_path = '../Dataset-PT.csv'
 df = pd.read_csv(data_path, low_memory=False)
 
 #%% md
