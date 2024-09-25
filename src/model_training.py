@@ -1,7 +1,6 @@
 # src/model_training.py
 
 import pandas as pd
-import numpy as np
 import joblib
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
@@ -15,7 +14,6 @@ from xgboost import XGBRegressor
 import warnings
 
 warnings.filterwarnings('ignore')  # Para evitar warnings innecesarios
-
 
 def load_and_preprocess_data(filepath):
     # Cargar el dataset
@@ -49,7 +47,7 @@ def load_and_preprocess_data(filepath):
     X_test[continuous_features] = scaler.transform(X_test[continuous_features])
 
     # Guardar el scaler para uso futuro
-    joblib.dump(scaler, 'models/scaler.joblib')
+    joblib.dump(scaler, '../models/scaler.joblib')
 
     return X_train, X_test, y_train, y_test
 
@@ -104,7 +102,7 @@ def define_models():
     return models
 
 
-def train_models(X_train, y_train, models, n_iter=50, cv=3, scoring='neg_mean_absolute_error'):
+def train_models(X_train, y_train, models, n_iter=5, cv=3, scoring='neg_mean_absolute_error'):
     trained_models = {}
     for name, config in models.items():
         print(f"Entrenando {name}...")
@@ -133,7 +131,7 @@ def save_trained_models(trained_models):
 
 def main():
     # Ruta al dataset
-    data_filepath = 'data/Dataset-PT.csv'
+    data_filepath = '../data/Dataset-PT.csv'
 
     # Cargar y preprocesar los datos
     X_train, X_test, y_train, y_test = load_and_preprocess_data(data_filepath)

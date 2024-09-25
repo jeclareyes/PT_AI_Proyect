@@ -5,3 +5,7 @@ pip freeze > requirements.txt
 #To clean unnecessary libraries in requirements.txt
 
 pip-chill > requirements.txt
+
+#To install libraries from requirements.txt
+
+pip install -r requirements.txt
