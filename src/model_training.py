@@ -21,10 +21,11 @@ import tqdm
 
 warnings.filterwarnings('ignore')  # Para evitar warnings innecesarios
 
+
 def load_and_preprocess_data(filepath):
     # Cargar el dataset
     df = pd.read_csv(filepath, low_memory=False)
-    df = df.iloc[0:100] #Momentaneamente esta limitado para que cargue rapido
+    #df = df.iloc[0:100] #Momentaneamente esta limitado para que cargue rapido
 
     # Convertir 'Calendar_date' a datetime
     df['Calendar_date'] = pd.to_datetime(df['Calendar_date'], format='%Y%m%d')
@@ -71,7 +72,7 @@ def define_models():
             }
         },
         'XGBoost': {
-            'model': XGBRegressor(device='cuda',random_state=42, objective='reg:squarederror'),
+            'model': XGBRegressor(device='cpu', random_state=42, objective='reg:squarederror'),
             'params': {
                 'n_estimators': [100, 200, 300],
                 'learning_rate': [0.01, 0.1, 0.2],
@@ -96,12 +97,14 @@ def define_models():
             }
         },
         'MLPRegressor': {
-            'model': MLPRegressor(max_iter=1000, random_state=42),
+            'model': MLPRegressor(max_iter=1000, early_stopping=True,
+                                  validation_fraction=0.1, random_state=42),
             'params': {
                 'hidden_layer_sizes': [(50,), (100,), (100, 50)],
-                'activation': ['relu', 'tanh'],
-                'solver': ['adam', 'lbfgs'],
-                'alpha': [0.0001, 0.001, 0.01]
+                'activation': ['relu'],  # relu tanh
+                'solver': ['adam'],  # adam lbfgs
+                'alpha': [0.001, 0.01, 0.1],
+                'learning_rate_init': [0.001, 0.01, 0.1]  # Opcional
             }
         }
     }
@@ -141,6 +144,7 @@ def objective(trial, model, params, X_train, y_train, cv, scoring):
     score = -1 * mean_absolute_error(y_train, model.fit(X_train, y_train).predict(X_train))
     return score
 
+
 def train_with_optuna(X_train, y_train, model, params, n_trials=50, cv=3, scoring='neg_mean_absolute_error'):
     def objective_func(trial):
         param = {}
@@ -161,6 +165,7 @@ def train_with_optuna(X_train, y_train, model, params, n_trials=50, cv=3, scorin
     model.set_params(**best_params)
     model.fit(X_train, y_train)
     return model, best_params
+
 
 def train_models(X_train, y_train, models, search_method='random', n_iter=5, cv=3, scoring='neg_mean_absolute_error'):
     trained_models = {}
@@ -200,6 +205,7 @@ def train_models(X_train, y_train, models, search_method='random', n_iter=5, cv=
         print(f"Tiempo de entrenamiento para {name}: {elapsed_time:.2f} segundos\n")
     return trained_models, timings
 
+
 def save_trained_models(trained_models):
     for name, model in trained_models.items():
         filename = f'../models/{name}_best_model.joblib'
@@ -218,14 +224,14 @@ def main():
     models = define_models()
 
     # Seleccionar el método de búsqueda ('random' o 'optuna')
-    search_method = 'random'  # Cambia a 'optuna' según necesites
+    search_method = 'optuna'  # 'random' 'optuna'
 
     # Iniciar el perfilado
     profiler = cProfile.Profile()
     profiler.enable()
 
     # Entrenar los modelos con Random Search
-    trained_models, timings = train_models(X_train, y_train, models, search_method='random')
+    trained_models, timings = train_models(X_train, y_train, models, search_method=search_method)
 
     # Detener el perfilado
     profiler.disable()
