@@ -1,18 +1,18 @@
-         1040763 function calls (1028230 primitive calls) in 17.676 seconds
+         31096947 function calls (30830175 primitive calls) in 45.163 seconds
 
    Ordered by: cumulative time
-   List reduced from 1420 to 10 due to restriction <10>
+   List reduced from 1299 to 10 due to restriction <10>
 
    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-      5/2    0.000    0.000   22.892   11.446 C:\Users\jecla\AppData\Local\Programs\Python\Python312\Lib\threading.py:637(wait)
-      2/1    0.000    0.000   17.636   17.636 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\src\model_training.py:165(train_models)
-      6/5    0.000    0.000   17.631    3.526 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\src\model_training.py:112(train_with_random_search)
-     10/5    0.000    0.000   17.631    3.526 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\sklearn\base.py:1456(wrapper)
-      6/5    0.001    0.000   17.627    3.525 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\sklearn\model_selection\_search.py:886(fit)
-      7/6    0.002    0.000   15.650    2.608 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\sklearn\utils\parallel.py:51(__call__)
-      6/5    0.000    0.000   15.401    3.080 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\sklearn\model_selection\_search.py:1958(_run_search)
-      6/5    0.001    0.000   15.401    3.080 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\sklearn\model_selection\_search.py:952(evaluate_candidates)
-       80    0.005    0.000   15.357    0.192 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\joblib\externals\loky\process_executor.py:644(wait_result_broken_or_wakeup)
-     1368   14.580    0.011   14.580    0.011 {built-in method time.sleep}
+      8/5    0.000    0.000   46.340    9.268 C:\Users\jecla\AppData\Local\Programs\Python\Python312\Lib\threading.py:637(wait)
+      8/5    0.000    0.000   46.339    9.268 C:\Users\jecla\AppData\Local\Programs\Python\Python312\Lib\threading.py:323(wait)
+      2/1    0.001    0.001   45.210   45.210 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\src\model_training.py:156(train_models)
+        4    0.000    0.000   45.206   11.302 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\src\model_training.py:135(train_with_optuna)
+        4    0.000    0.000   44.477   11.119 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\optuna\study\study.py:373(optimize)
+        4    0.000    0.000   44.477   11.119 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\optuna\study\_optimize.py:34(_optimize)
+        4    0.003    0.001   44.477   11.119 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\optuna\study\_optimize.py:122(_optimize_sequential)
+      200    0.005    0.000   44.473    0.222 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\optuna\study\_optimize.py:180(_run_trial)
+      200    0.007    0.000   44.190    0.221 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\src\model_training.py:136(objective_func)
+   561/51    0.006    0.000   20.991    0.412 C:\Users\jecla\PycharmProjects\PT_AI_Proyect\venv\Lib\site-packages\xgboost\core.py:707(inner_f)
 
 
