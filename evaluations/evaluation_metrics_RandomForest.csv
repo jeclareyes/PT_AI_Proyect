@@ -1,0 +1,2 @@
+Modelo,Hiperparámetros,Tiempo_Entrenamiento_Segundos,MAE,MSE,RMSE,MAPE,R2
+RandomForest,bootstrap=True; ccp_alpha=0.0; criterion=squared_error; max_depth=25; max_features=0.7; max_leaf_nodes=None; max_samples=0.1; min_impurity_decrease=0.0; min_samples_leaf=2; min_samples_split=10; min_weight_fraction_leaf=0.0; monotonic_cst=None; n_estimators=300; n_jobs=-1; oob_score=False; random_state=42; verbose=0; warm_start=False,18.903514862060547,13.290572996556657,500.955723373593,22.382040196854106,201406390618836.78,0.9866024595297309
