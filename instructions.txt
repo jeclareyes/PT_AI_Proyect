@@ -1,8 +1,8 @@
-The python codes are in the folder src, except the jupyter notebook which is just in the main folder.
+The python codes are in the folder src (training_models.py, evaluation.py, plots.py), except the Jupyter notebook (EDA.ipynb) which is just in the main folder.
 
-metrics_1 contains the .csv file from the evaluation
-plots contains all the plots
-no .joblib files are locsted in the repo because they are too big (over 12GB in total)
+metrics_1 contains the .csv file results from the evaluation
+plots contains all the plots (bar charts mainly)
+no .joblib files are located in the repo because they are too big (over 12GB in total)
 
 
 ##%%%
