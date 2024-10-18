@@ -1,4 +1,5 @@
 # src/model_training.py
+#AI tools were used to develop and enhance this code
 
 import os
 import pandas as pd
@@ -14,26 +15,25 @@ import warnings
 import time
 import optuna
 from tqdm import tqdm
-import torch  # Para verificar CUDA
+import torch  # For CUDA verification
 from sklearn.metrics import mean_absolute_error
 import numpy as np
 
-warnings.filterwarnings('ignore')  # Para evitar warnings innecesarios
-
+warnings.filterwarnings('ignore')  # Suppress unnecessary warnings
 
 def load_and_preprocess_data(filepath, scenario_id, sample_type, sample_subdir, additional_columns_to_drop=None,
                              max_rows=None, overwrite=False):
     """
-    Carga y preprocesa los datos para una combinación específica de escenario y muestra.
+    Loads and preprocesses data for a specific combination of scenario and sample type.
 
     Args:
-        filepath (str): Ruta al archivo CSV.
-        scenario_id (str): Identificador del escenario ('s1', 's2', 's3').
-        sample_type (str): Tipo de muestra ('no_sample', 'stratified', 'kMeans').
-        sample_subdir (str): Subcarpeta del escenario donde se guardarán los archivos.
-        additional_columns_to_drop (list, optional): Lista de columnas adicionales a eliminar.
-        max_rows (int, optional): Número máximo de filas a cargar. Si es None, carga todo el dataset.
-        overwrite (bool): Si es True, sobrescribe los archivos preprocesados existentes.
+        filepath (str): Path to the CSV file.
+        scenario_id (str): Scenario identifier ('s1', 's2', 's3').
+        sample_type (str): Sample type ('no_sample', 'stratified', 'kMeans').
+        sample_subdir (str): Subdirectory where the files will be saved.
+        additional_columns_to_drop (list, optional): Additional columns to drop.
+        max_rows (int, optional): Maximum number of rows to load. If None, load the entire dataset.
+        overwrite (bool): If True, overwrite existing preprocessed files.
 
     Returns:
         tuple: (X_train, X_test, y_train, y_test)
@@ -43,7 +43,7 @@ def load_and_preprocess_data(filepath, scenario_id, sample_type, sample_subdir, 
     sample_subdir = os.path.join(sample_subdir, sample_type)
     os.makedirs(sample_subdir, exist_ok=True)
 
-    # Definir rutas para los conjuntos de datos preprocesados
+    # Define paths for preprocessed datasets
     X_train_path = os.path.join(sample_subdir, f'{prefix}_{sample_suffix}_X_train.joblib')
     X_test_path = os.path.join(sample_subdir, f'{prefix}_{sample_suffix}_X_test.joblib')
     y_train_path = os.path.join(sample_subdir, f'{prefix}_{sample_suffix}_y_train.joblib')
@@ -51,10 +51,10 @@ def load_and_preprocess_data(filepath, scenario_id, sample_type, sample_subdir, 
     scaler_path = os.path.join(sample_subdir, f'{prefix}_{sample_suffix}_scaler.joblib')
     categorical_vars_path = os.path.join(sample_subdir, f'{prefix}_{sample_suffix}_categorical_vars.joblib')
 
-    # Verificar si los datos preprocesados ya existen y si no se debe sobrescribir
+    # Check if preprocessed data exists and if overwriting is disabled
     if (all(os.path.exists(p) for p in [X_train_path, X_test_path, y_train_path, y_test_path, scaler_path,
                                         categorical_vars_path])) and not overwrite:
-        print(f"Cargando datos preprocesados desde archivos existentes para {scenario_id} - {sample_type}...")
+        print(f"Loading preprocessed data from existing files for {scenario_id} - {sample_type}...")
         X_train = joblib.load(X_train_path)
         X_test = joblib.load(X_test_path)
         y_train = joblib.load(y_train_path)
@@ -62,51 +62,51 @@ def load_and_preprocess_data(filepath, scenario_id, sample_type, sample_subdir, 
         categorical_vars_original = joblib.load(categorical_vars_path)
         return X_train, X_test, y_train, y_test, categorical_vars_original
     else:
-        print(f"Preprocesando datos desde el archivo CSV para {scenario_id} - {sample_type}...")
+        print(f"Preprocessing data from CSV for {scenario_id} - {sample_type}...")
 
-        # Cargar el dataset
+        # Load the dataset
         df = pd.read_csv(filepath, low_memory=False)
         if max_rows:
             df = df.iloc[0:max_rows]
 
-        # Convertir 'Calendar_date' a datetime si existe
+        # Convert 'Calendar_date' to datetime if it exists
         if 'Calendar_date' in df.columns:
             df['Calendar_date'] = pd.to_datetime(df['Calendar_date'], format='%Y%m%d')
 
-        # Columnas siempre a eliminar
+        # Columns to always drop
         columns_to_drop = ['Calendar_date', 'route_id', 'bus_id', 'weather', 'temperature',
                            'day_of_week_num', 'day_of_week', 'time_of_day']
 
-        # Añadir columnas adicionales a eliminar si existen
+        # Add additional columns to drop if provided
         if additional_columns_to_drop:
             columns_present_to_drop = [col for col in additional_columns_to_drop if col in df.columns]
             columns_to_drop.extend(columns_present_to_drop)
 
-        # Eliminar las columnas especificadas
+        # Drop the specified columns
         df = df.drop(columns=columns_to_drop, axis=1)
 
-        # Lista de variables categóricas originales
+        # List of original categorical variables
         categorical_vars_original = []
 
-        # Tratar 'stop_sequence' como categórica y realizar One-Hot Encoding si existe
+        # Treat 'stop_sequence' as categorical and perform One-Hot Encoding if it exists
         if 'stop_sequence' in df.columns:
-            df['stop_sequence'] = df['stop_sequence'].astype(str)  # Convertir a string para One-Hot Encoding
+            df['stop_sequence'] = df['stop_sequence'].astype(str)  # Convert to string for One-Hot Encoding
             categorical_vars_original.append('stop_sequence')
             df = pd.get_dummies(df, columns=['stop_sequence'], prefix='stop_seq')
         else:
-            print("'stop_sequence' no presente en los datos. Skipping One-Hot Encoding.")
+            print("'stop_sequence' not present in data. Skipping One-Hot Encoding.")
 
-        # Separar características y variable objetivo
+        # Separate features and target variable
         if 'arrival_delay' not in df.columns:
-            raise KeyError("La columna 'arrival_delay' no está presente en el dataset.")
+            raise KeyError("The 'arrival_delay' column is not present in the dataset.")
 
         X = df.drop(['arrival_delay'], axis=1)
         y = df['arrival_delay']
 
-        # Dividir los datos en entrenamiento y prueba (80/20) para cada muestra
+        # Split the data into training and test sets (80/20 split)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # Definir características continuas dinámicamente
+        # Define continuous features dynamically
         all_continuous_features = ['dwell_time', 'travel_time_for_previous_section', 'scheduled_travel_time',
                                    'upstream_stop_delay', 'origin_delay', 'previous_bus_delay',
                                    'previous_trip_travel_time', 'traffic_condition', 'recurrent_delay']
@@ -116,34 +116,34 @@ def load_and_preprocess_data(filepath, scenario_id, sample_type, sample_subdir, 
             scaler = StandardScaler()
             X_train[present_continuous] = scaler.fit_transform(X_train[present_continuous])
             X_test[present_continuous] = scaler.transform(X_test[present_continuous])
-            # Guardar el scaler para uso futuro
+            # Save the scaler for future use
             joblib.dump(scaler, scaler_path)
-            print(f"Scaler guardado en {scaler_path}")
+            print(f"Scaler saved at {scaler_path}")
         else:
             print("No continuous features found to scale.")
 
-        # Guardar las variables categóricas originales
+        # Save the original categorical variables
         joblib.dump(categorical_vars_original, categorical_vars_path)
-        print(f"Variables categóricas originales guardadas en {categorical_vars_path}")
+        print(f"Original categorical variables saved at {categorical_vars_path}")
 
-        # Guardar los conjuntos de datos preprocesados
+        # Save the preprocessed datasets
         joblib.dump(X_train, X_train_path)
         joblib.dump(X_test, X_test_path)
         joblib.dump(y_train, y_train_path)
         joblib.dump(y_test, y_test_path)
-        print(f"Conjuntos de datos guardados en '{X_train_path}', '{X_test_path}', '{y_train_path}', '{y_test_path}'")
+        print(f"Datasets saved at '{X_train_path}', '{X_test_path}', '{y_train_path}', '{y_test_path}'")
 
         return X_train, X_test, y_train, y_test, categorical_vars_original
 
 
 def define_models():
     """
-    Define los modelos y sus espacios de hiperparámetros.
+    Define the models and their hyperparameter spaces.
 
     Returns:
-        dict: Diccionario de modelos con sus hiperparámetros.
+        dict: Dictionary of models and their hyperparameters.
     """
-    # Detectar si CUDA está disponible para XGBoost
+    # Check if CUDA is available for XGBoost
     cuda_available = torch.cuda.is_available()
     xgb_tree_method = 'gpu_hist' if cuda_available else 'hist'
 
@@ -155,10 +155,10 @@ def define_models():
             'params': {
                 'hidden_layer_sizes': [(50,), (100,), (100, 50), (100, 100),
                                        (150, 100), (150, 150)],
-                'activation': ['tanh'],  # relu tanh
-                'solver': ['adam'],  # adam lbfgs
+                'activation': ['tanh'],  # relu was too computationally demanding
+                'solver': ['adam'],
                 'alpha': [0.001, 0.01, 0.1],
-                'learning_rate_init': [0.001, 0.01, 0.1],  # Opcional
+                'learning_rate_init': [0.001, 0.01, 0.1],
                 'batch_size': ['auto', 32, 64, 128]
             }
         },
@@ -179,7 +179,7 @@ def define_models():
                 objective='reg:squarederror',
                 eval_metric='mae',
                 tree_method=xgb_tree_method,
-                subsample=0.1,  # Aumenté subsample de 0.1 a 0.8 para mayor estabilidad
+                subsample=0.1,  # recommended when using gradient-based sampling method
                 sampling_method='gradient_based' if cuda_available else 'uniform'
             ),
             'params': {
@@ -209,7 +209,7 @@ def define_models():
             'params': {
                 'C': [0.1, 1, 10],
                 'epsilon': [0.1, 0.2, 0.5],
-                'kernel': ['linear', 'rbf'],  # Cambiado de 'precomputed' a 'linear' y 'rbf'
+                'kernel': ['linear', 'rbf'],
                 'gamma': ['scale', 'auto', 0.01, 0.1, 1.0, 10]
             }
         }
@@ -221,23 +221,23 @@ def define_models():
 
 def objective(trial, model, params, X_train, y_train, cv, scoring, scenario_id, sample_type):
     """
-    Función objetivo para Optuna con validación cruzada manual.
+    Objective function for Optuna with manual cross-validation.
 
     Args:
-        trial: Trial de Optuna.
-        model: Modelo a entrenar.
-        params (dict): Espacio de hiperparámetros.
-        X_train: Datos de entrenamiento.
-        y_train: Objetivos de entrenamiento.
-        cv (int): Número de pliegues para la validación cruzada.
-        scoring (str): Métrica de evaluación.
-        scenario_id (str): Identificador del escenario ('s1', 's2', 's3').
-        sample_type (str): Tipo de muestra ('no_sample', 'stratified', 'kMeans').
+        trial: Optuna trial.
+        model: Model to train.
+        params (dict): Hyperparameter space.
+        X_train: Training data.
+        y_train: Training targets.
+        cv (int): Number of cross-validation folds.
+        scoring (str): Evaluation metric.
+        scenario_id (str): Scenario identifier ('s1', 's2', 's3').
+        sample_type (str): Sample type ('no_sample', 'stratified', 'kMeans').
 
     Returns:
-        float: Métrica de rendimiento media.
+        float: Mean performance metric.
     """
-    # Sugerir hiperparámetros
+    # Suggest hyperparameters
     param_suggestions = {}
     for param, values in params.items():
         if isinstance(values, list):
@@ -247,10 +247,10 @@ def objective(trial, model, params, X_train, y_train, cv, scoring, scenario_id, 
         else:
             param_suggestions[param] = trial.suggest_categorical(param, values)
 
-    # Configurar el modelo con los hiperparámetros sugeridos
+    # Configure the model with the suggested hyperparameters
     model.set_params(**param_suggestions)
 
-    # Implementar K-Fold manual
+    # Manual K-Fold implementation
     kf = KFold(n_splits=cv, shuffle=True, random_state=42)
     mae_scores = []
 
@@ -263,12 +263,12 @@ def objective(trial, model, params, X_train, y_train, cv, scoring, scenario_id, 
         mae = mean_absolute_error(y_val, y_pred)
         mae_scores.append(mae)
 
-        # Reportar el MAE de este pliegue a Optuna
+        # Report the MAE for this fold to Optuna
         trial.report(mae, step=fold)
 
-        # Decidir si podar el trial
+        # Decide whether to prune the trial
         if trial.should_prune():
-            print(f"Trial {trial.number} podado en pliegue {fold} para {scenario_id} - {sample_type} con MAE={mae}")
+            print(f"Trial {trial.number} pruned at fold {fold} for {scenario_id} - {sample_type} with MAE={mae}")
             raise optuna.exceptions.TrialPruned()
 
     return np.mean(mae_scores)
@@ -277,24 +277,24 @@ def objective(trial, model, params, X_train, y_train, cv, scoring, scenario_id, 
 def train_with_optuna(X_train, y_train, model, params, n_trials=50, cv=3, scoring='neg_mean_absolute_error',
                       scenario_id='s1', sample_type='no_sample'):
     """
-    Entrena un modelo usando Optuna para la optimización de hiperparámetros.
+    Trains a model using Optuna for hyperparameter optimization.
 
     Args:
-        X_train: Datos de entrenamiento.
-        y_train: Objetivos de entrenamiento.
-        model: Modelo a entrenar.
-        params (dict): Espacio de hiperparámetros.
-        n_trials (int): Número de trials de Optuna.
-        cv (int): Número de pliegues para la validación cruzada.
-        scoring (str): Métrica de evaluación.
-        scenario_id (str): Identificador del escenario ('s1', 's2', 's3').
-        sample_type (str): Tipo de muestra ('no_sample', 'stratified', 'kMeans').
+        X_train: Training data.
+        y_train: Training targets.
+        model: Model to train.
+        params (dict): Hyperparameter space.
+        n_trials (int): Number of Optuna trials.
+        cv (int): Number of cross-validation folds.
+        scoring (str): Evaluation metric.
+        scenario_id (str): Scenario identifier ('s1', 's2', 's3').
+        sample_type (str): Sample type ('no_sample', 'stratified', 'kMeans').
 
     Returns:
-        tuple: Modelo entrenado y los mejores hiperparámetros.
+        tuple: Trained model and the best hyperparameters.
     """
     pruner = optuna.pruners.MedianPruner(n_startup_trials=10, n_warmup_steps=0)
-    study = optuna.create_study(direction='minimize', pruner=pruner)  # 'minimize' para MAE
+    study = optuna.create_study(direction='minimize', pruner=pruner)  # 'minimize' for MAE
     study.optimize(
         lambda trial: objective(trial, model, params, X_train, y_train, cv, scoring, scenario_id, sample_type),
         n_trials=n_trials)
@@ -306,25 +306,25 @@ def train_with_optuna(X_train, y_train, model, params, n_trials=50, cv=3, scorin
     return model, best_params
 
 
-def train_with_random_search(X_train, y_train, model, params, n_iter=10, cv=5, scoring='neg_mean_absolute_error',
+def train_with_random_search(X_train, y_train, model, params, n_iter=100, cv=5, scoring='neg_mean_absolute_error',
                              n_jobs=-1, scenario_id='s1', sample_type='no_sample'):
     """
-    Entrena un modelo usando RandomizedSearchCV para la optimización de hiperparámetros.
+    Trains a model using RandomizedSearchCV for hyperparameter optimization.
 
     Args:
-        X_train: Datos de entrenamiento.
-        y_train: Objetivos de entrenamiento.
-        model: Modelo a entrenar.
-        params (dict): Espacio de hiperparámetros.
-        n_iter (int): Número de iteraciones para RandomizedSearchCV.
-        cv (int): Número de pliegues para la validación cruzada.
-        scoring (str): Métrica de evaluación.
-        n_jobs (int): Número de procesos para paralelización.
-        scenario_id (str): Identificador del escenario ('s1', 's2', 's3').
-        sample_type (str): Tipo de muestra ('no_sample', 'stratified', 'kMeans').
+        X_train: Training data.
+        y_train: Training targets.
+        model: Model to train.
+        params (dict): Hyperparameter space.
+        n_iter (int): Number of iterations for RandomizedSearchCV.
+        cv (int): Number of cross-validation folds.
+        scoring (str): Evaluation metric.
+        n_jobs (int): Number of processes for parallelization.
+        scenario_id (str): Scenario identifier ('s1', 's2', 's3').
+        sample_type (str): Sample type ('no_sample', 'stratified', 'kMeans').
 
     Returns:
-        RandomizedSearchCV: Objeto de RandomizedSearchCV entrenado.
+        RandomizedSearchCV: Trained RandomizedSearchCV object.
     """
     random_search = RandomizedSearchCV(
         estimator=model,
@@ -332,7 +332,7 @@ def train_with_random_search(X_train, y_train, model, params, n_iter=10, cv=5, s
         n_iter=n_iter,
         cv=cv,
         scoring=scoring,
-        verbose=2,  # Cambiar de verbose=1 a verbose=2
+        verbose=2,
         random_state=42,
         n_jobs=n_jobs
     )
@@ -340,41 +340,41 @@ def train_with_random_search(X_train, y_train, model, params, n_iter=10, cv=5, s
     return random_search
 
 
-def train_models(X_train, y_train, models, selected_models=None, search_method='random', n_iter=10, cv=5,
+def train_models(X_train, y_train, models, selected_models=None, search_method='random', n_iter=100, cv=5,
                  scoring='neg_mean_absolute_error', scenario_id='s1', sample_type='no_sample'):
     """
-    Entrena los modelos seleccionados usando el método de búsqueda especificado.
+    Trains selected models using the specified search method.
 
     Args:
-        X_train: Datos de entrenamiento.
-        y_train: Objetivos de entrenamiento.
-        models (dict): Diccionario de modelos y sus hiperparámetros.
-        selected_models (list, optional): Lista de nombres de modelos a entrenar. Si es None, entrena todos.
-        search_method (str): Método de búsqueda de hiperparámetros: 'random' o 'optuna'.
-        n_iter (int): Número de iteraciones para Random Search o número de trials para Optuna.
-        cv (int): Número de pliegues para la validación cruzada.
-        scoring (str): Métrica de evaluación.
-        scenario_id (str): Identificador del escenario ('s1', 's2', 's3').
-        sample_type (str): Tipo de muestra ('no_sample', 'stratified', 'kMeans').
+        X_train: Training data.
+        y_train: Training targets.
+        models (dict): Dictionary of models and their hyperparameters.
+        selected_models (list, optional): List of model names to train. If None, train all.
+        search_method (str): Hyperparameter search method: 'random' or 'optuna'.
+        n_iter (int): Number of iterations for Random Search or number of trials for Optuna.
+        cv (int): Number of cross-validation folds.
+        scoring (str): Evaluation metric.
+        scenario_id (str): Scenario identifier ('s1', 's2', 's3').
+        sample_type (str): Sample type ('no_sample', 'stratified', 'kMeans').
 
     Returns:
-        dict: Modelos entrenados.
-        dict: Tiempos de entrenamiento por modelo.
+        dict: Trained models.
+        dict: Training times by model.
     """
     trained_models = {}
     timings = {}
 
-    # Si no se especifica, entrenar todos los modelos
+    # If no specific models are selected, train all models
     if selected_models is None:
         selected_models = list(models.keys())
 
-    for name in tqdm(selected_models, desc=f"Entrenando modelos para {scenario_id} - {sample_type}"):
+    for name in tqdm(selected_models, desc=f"Training models for {scenario_id} - {sample_type}"):
         if name not in models:
-            print(f"Modelo '{name}' no encontrado en la definición de modelos. Saltando...")
+            print(f"Model '{name}' not found in model definition. Skipping...")
             continue
 
         config = models[name]
-        print(f"\nEntrenando {name} con método '{search_method}' para {scenario_id} - {sample_type}...")
+        print(f"\nTraining {name} with method '{search_method}' for {scenario_id} - {sample_type}...")
         start_time = time.time()
 
         if search_method == 'random':
@@ -396,161 +396,161 @@ def train_models(X_train, y_train, models, selected_models=None, search_method='
                 X_train, y_train,
                 config['model'],
                 config['params'],
-                n_trials=n_iter,  # Usar n_iter directamente como n_trials
+                n_trials=n_iter,
                 cv=cv,
                 scoring=scoring,
                 scenario_id=scenario_id,
                 sample_type=sample_type
             )
         else:
-            raise ValueError("Método de búsqueda no soportado. Usa 'random' o 'optuna'.")
+            raise ValueError("Unsupported search method. Use 'random' or 'optuna'.")
 
         end_time = time.time()
         elapsed_time = end_time - start_time
         timings[name] = elapsed_time
         trained_models[name] = best_model
-        print(f"Mejores hiperparámetros para {name} en {scenario_id} - {sample_type}: {best_params}")
-        print(f"Tiempo de entrenamiento para {name} en {scenario_id} - {sample_type}: {elapsed_time:.2f} segundos")
+        print(f"Best hyperparameters for {name} in {scenario_id} - {sample_type}: {best_params}")
+        print(f"Training time for {name} in {scenario_id} - {sample_type}: {elapsed_time:.2f} seconds")
 
     return trained_models, timings
 
 
 def save_trained_models(trained_models, sample_subdir, prefix='s1_no_sample'):
     """
-    Guarda los modelos entrenados en archivos separados.
+    Save trained models in separate files.
 
     Args:
-        trained_models (dict): Diccionario de modelos entrenados.
-        sample_subdir (str): Subcarpeta donde guardar los modelos.
-        prefix (str): Prefijo para los nombres de los archivos (e.g., 's1_no_sample').
+        trained_models (dict): Dictionary of trained models.
+        sample_subdir (str): Subdirectory to save the models.
+        prefix (str): Prefix for file names (e.g., 's1_no_sample').
     """
     for name, model in trained_models.items():
         filename = os.path.join(sample_subdir, f'{prefix}_{name}_best_model.joblib')
         joblib.dump(model, filename)
-        print(f"Modelo {name} guardado en {filename}")
+        print(f"Model {name} saved at {filename}")
 
 
 def save_training_times(timings, sample_subdir, prefix='s1_no_sample'):
     """
-    Guarda los tiempos de entrenamiento en archivos separados por modelo.
+    Save training times in separate files by model.
 
     Args:
-        timings (dict): Diccionario de tiempos de entrenamiento.
-        sample_subdir (str): Subcarpeta donde guardar los tiempos.
-        prefix (str): Prefijo para los nombres de los archivos (e.g., 's1_no_sample').
+        timings (dict): Dictionary of training times.
+        sample_subdir (str): Subdirectory to save the times.
+        prefix (str): Prefix for file names (e.g., 's1_no_sample').
     """
     for name, elapsed_time in timings.items():
         filename = os.path.join(sample_subdir, f'{prefix}_{name}_training_time.joblib')
         joblib.dump(elapsed_time, filename)
-        print(f"Tiempo de entrenamiento para {name} guardado en {filename}")
+        print(f"Training time for {name} saved at {filename}")
 
 
 def main():
     """
-    Función principal que orquesta el flujo de trabajo.
+    Main function orchestrating the workflow.
     """
-    # Definir paths
-    base_dir = os.path.dirname(os.path.abspath(__file__))  # Directorio actual del script
+    # Define paths
+    base_dir = os.path.dirname(os.path.abspath(__file__))  # Current script directory
     data_dir = os.path.join(base_dir, '..', 'data')
-    models_base_dir = os.path.join(base_dir, '..', 'models_todo')
+    models_base_dir = os.path.join(base_dir, '..', 'models_optuna_1')
 
-    # Crear el directorio de modelos si no existe
+    # Create the model directory if it doesn't exist
     os.makedirs(models_base_dir, exist_ok=True)
 
-    # Parámetros globales de entrenamiento
+    # Global training parameters
     config = {
-        'n_iter': 100,  # Número de iteraciones para Random Search y n_trials para Optuna
-        'cv': 5,  # Número de pliegues para la validación cruzada
-        'scoring': 'neg_mean_absolute_error',  # Métrica de evaluación
-        'search_method': 'random',  # Método de búsqueda: 'random' o 'optuna'
-        'random_state': 42,  # Semilla aleatoria para reproducibilidad
-        'n_jobs': -1,  # Número de procesos para paralelización
-        # Otros parámetros globales que consideres necesarios
+        'n_iter': 100,  # Number of iterations for Random Search and n_trials for Optuna
+        'cv': 5,  # Number of cross-validation folds
+        'scoring': 'neg_mean_absolute_error',  # Evaluation metric
+        'search_method': 'optuna',  # Search method: 'random' or 'optuna'
+        'random_state': 42,  # Random seed for reproducibility
+        'n_jobs': -1,  # Number of processes for parallelization
+        # Other global parameters if needed
     }
 
-    # Opción para sobrescribir los datos preprocesados existentes
-    overwrite_preprocessed = True  # Cambia a True si deseas sobrescribir los archivos existentes
+    # Option to overwrite existing preprocessed data
+    overwrite_preprocessed = True  # If it is desired to overwrite existing files
 
-    # Definir las columnas adicionales a eliminar por escenario
+    # Creating scenarios by discarding features
     scenario_columns_to_drop = {
-        's1': [],  # Escenario 1: Solo las columnas siempre eliminadas
+        's1': [],  # Scenario 1: Considers all features (continuous and categorical)
         's2': ['travel_time_for_previous_section', 'recurrent_delay',
                'previous_trip_travel_time', 'scheduled_travel_time',
-               'trafic_condition'],  # Escenario 2: Columnas adicionales
+               'trafic_condition'],  # Scenario 2: dropped some continuous features
         's3': ['travel_time_for_previous_section', 'recurrent_delay',
                'previous_trip_travel_time', 'scheduled_travel_time',
                'traffic_condition', 'factor(weather)Light_Rain',
                'factor(weather)Light_Snow', 'factor(weather)Normal', 'factor(weather)Rain',
                'factor(weather)Snow', 'factor(temperature)Cold', 'factor(temperature)Extra_cold',
-               'factor(temperature)Normal']  # Escenario 3: Columnas adicionales
+               'factor(temperature)Normal']  # Scenario 3: dropped both continuous and categorical features
     }
-    # Especificar qué escenarios y muestras entrenar
+    # which scenarios and samples to train
     # selected_scenarios = ['s1', 's2', 's3']
-    selected_scenarios = ['s1']  # Modifica esta lista según tus necesidades, e.g., ['s1', 's2']
+    selected_scenarios = ['s1']
     # selected_samples = ['no_sample', 'stratified', 'kMeans']
-    selected_samples = ['no_sample']  # Modifica esta lista según tus necesidades, e.g., ['no_sample', 'stratified']
+    selected_samples = ['no_sample']
 
-    # Especificar qué modelos entrenar
+    # Specify which models to train
     #  'MLPRegressor' 'KNeighbors' 'XGBoost' 'RandomForest' 'SVR'
-    selected_models = ['MLPRegressor']  # Modifica esta lista según tus necesidades, e.g., ['RandomForest', 'XGBoost']
+    selected_models = ['MLPRegressor']
 
-    # Mapeo de escenarios a archivos CSV por muestra
+    # Map scenarios to CSV files by sample
     scenario_map = {
         's1': {
-            'no_sample': 's1_no_sample.csv',
-            'stratified': 's1_stratified.csv',
-            'kMeans': 's1_kMeans.csv'
+            'no_sample': 'no_sample.csv',
+            'stratified': 'stratified.csv',
+            'kMeans': 'kMeans.csv'
         },
         's2': {
-            'no_sample': 's1_no_sample.csv',
-            'stratified': 's1_stratified.csv',
-            'kMeans': 's1_kMeans.csv'
+            'no_sample': 'no_sample.csv',
+            'stratified': 'stratified.csv',
+            'kMeans': 'kMeans.csv'
         },
         's3': {
-            'no_sample': 's1_no_sample.csv',
-            'stratified': 's1_stratified.csv',
-            'kMeans': 's1_kMeans.csv'
+            'no_sample': 'no_sample.csv',
+            'stratified': 'stratified.csv',
+            'kMeans': 'kMeans.csv'
         }
     }
 
-    # Definir los modelos y sus hiperparámetros
+    # Define models and their hyperparameters
     models = define_models()
 
-    # Iterar sobre cada escenario seleccionado
+    # Iterate over each selected scenario
     for scenario_id in selected_scenarios:
-        print(f"\n===== Procesando {scenario_id} =====")
+        print(f"\n===== Processing {scenario_id} =====")
         samples_map = scenario_map.get(scenario_id, None)
 
         if not samples_map:
-            print(f"Configuración de muestras para {scenario_id} no encontrada en el mapeo. Saltando este escenario.")
+            print(f"Sample configuration for {scenario_id} not found in the map. Skipping this scenario.")
             continue
 
-        # Iterar sobre cada muestra seleccionada
+        # Iterate over each selected sample
         for sample_type in selected_samples:
-            print(f"\n--- Muestra: {sample_type} ---")
+            print(f"\n--- Sample: {sample_type} ---")
             csv_filename = samples_map.get(sample_type, None)
 
             if not csv_filename:
                 print(
-                    f"Archivo CSV para {scenario_id} - {sample_type} no encontrado en el mapeo. Saltando esta muestra.")
+                    f"CSV file for {scenario_id} - {sample_type} not found in the map. Skipping this sample.")
                 continue
 
             csv_path = os.path.join(data_dir, csv_filename)
-            print(f"reading: ", csv_filename," from: ",csv_path)
+            print(f"reading: ", csv_filename, " from: ", csv_path)
 
             if not os.path.exists(csv_path):
-                print(f"Archivo CSV '{csv_path}' no existe. Saltando esta muestra.")
+                print(f"CSV file '{csv_path}' does not exist. Skipping this sample.")
                 continue
 
-            # Definir la subcarpeta del escenario y muestra
+            # Define subdirectory for the scenario and sample
             scenario_subdir = os.path.join(models_base_dir, f's{scenario_id[-1]}')
             sample_subdir = os.path.join(scenario_subdir, sample_type)
             os.makedirs(sample_subdir, exist_ok=True)
 
-            # Definir la ruta del scaler específico de la muestra
+            # Define path for sample-specific scaler
             scaler_path = os.path.join(sample_subdir, f'{scenario_id}_{sample_type}_scaler.joblib')
 
-            # Cargar y preprocesar los datos
+            # Load and preprocess the data
             try:
                 X_train, X_test, y_train, y_test, categorical_vars_original = load_and_preprocess_data(
                     filepath=csv_path,
@@ -558,20 +558,21 @@ def main():
                     sample_type=sample_type,
                     sample_subdir=scenario_subdir,
                     additional_columns_to_drop=scenario_columns_to_drop[scenario_id],
-                    max_rows=None,  # Puedes ajustar esto si necesitas limitar las filas
+                    max_rows=None,  # Takes just the specified number of rows. It was used only when coding for
+                    # the first time to check if the code was functioning properly
                     overwrite=overwrite_preprocessed
                 )
             except FileNotFoundError as e:
                 print(e)
                 print(
-                    f"Error al procesar {scenario_id} - {sample_type}. Asegúrate de que los datos están correctamente formateados.")
+                    f"Error processing {scenario_id} - {sample_type}. Make sure the data is correctly formatted.")
                 continue
             except KeyError as e:
                 print(e)
-                print(f"Error en el preprocesamiento de {scenario_id} - {sample_type}.")
+                print(f"Preprocessing error for {scenario_id} - {sample_type}.")
                 continue
 
-            # Guardar el conjunto de prueba para evaluación futura
+            # Save the test set for future evaluation
             if sample_type == 'no_sample':
                 X_test_path_save = os.path.join(sample_subdir, f'{scenario_id}_{sample_type}_X_test.joblib')
                 y_test_path_save = os.path.join(sample_subdir, f'{scenario_id}_{sample_type}_y_test.joblib')
@@ -580,25 +581,22 @@ def main():
                         os.path.exists(X_test_path_save) and os.path.exists(y_test_path_save)):
                     joblib.dump(X_test, X_test_path_save)
                     joblib.dump(y_test, y_test_path_save)
-                    print(f"Conjunto de prueba guardado en '{X_test_path_save}' y '{y_test_path_save}'")
+                    print(f"Test set saved at '{X_test_path_save}' and '{y_test_path_save}'")
                 else:
-                    print("Conjunto de prueba ya existe. No se guarda nuevamente.")
+                    print("Test set already exists. Skipping save.")
             else:
-                # Guardar también los conjuntos de prueba para muestras subsampled si es necesario
+                # Optionally save the test sets for subsampled data if necessary
                 X_test_path_save = os.path.join(sample_subdir, f'{scenario_id}_{sample_type}_X_test.joblib')
                 y_test_path_save = os.path.join(sample_subdir, f'{scenario_id}_{sample_type}_y_test.joblib')
 
                 if not (os.path.exists(X_test_path_save) and os.path.exists(y_test_path_save)):
-                    # Opcional: Si deseas crear un nuevo conjunto de prueba para las muestras subsampled
-                    # Puedes decidir si es necesario o no
-                    # Aquí, simplemente reutilizo el X_test y y_test de 'no_sample' para mantener consistencia
                     joblib.dump(X_test, X_test_path_save)
                     joblib.dump(y_test, y_test_path_save)
-                    print(f"Conjunto de prueba guardado en '{X_test_path_save}' y '{y_test_path_save}'")
+                    print(f"Test set saved at '{X_test_path_save}' and '{y_test_path_save}'")
                 else:
-                    print("Conjunto de prueba ya existe. No se guarda nuevamente.")
+                    print("Test set already exists. Skipping save.")
 
-            # Entrenar los modelos seleccionados con el método de búsqueda especificado
+            # Train selected models using the specified search method
             trained_models, timings = train_models(
                 X_train, y_train, models,
                 selected_models=selected_models,
@@ -610,16 +608,16 @@ def main():
                 sample_type=sample_type
             )
 
-            # Definir el prefijo para los archivos (ejemplo: 's1_no_sample')
+            # Define prefix for file names ex. 's1_no_sample'
             prefix = f"{scenario_id}_{sample_type}"
 
-            # Guardar los modelos entrenados y los tiempos de entrenamiento
+            # Save the trained models and training times
             save_trained_models(trained_models, sample_subdir, prefix=prefix)
             save_training_times(timings, sample_subdir, prefix=prefix)
 
-            print(f"===== Entrenamiento completado para {scenario_id} - {sample_type} =====\n")
+            print(f"===== Training completed for {scenario_id} - {sample_type} =====\n")
 
-    print("Entrenamiento de todos los escenarios y muestras completado.")
+    print("Training for all scenarios and samples completed.")
 
 
 if __name__ == "__main__":
