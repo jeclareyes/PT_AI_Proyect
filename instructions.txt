@@ -1,3 +1,11 @@
+The python codes are in the folder src, except the jupyter notebook which is just in the main folder.
+
+metrics_1 contains the .csv file from the evaluation
+plots contains all the plots
+no .joblib files are locsted in the repo because they are too big (over 12GB in total)
+
+
+##%%%
 #For updating requirements.txt
 
 pip freeze > requirements.txt
